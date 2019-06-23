@@ -1,0 +1,50 @@
+{%extends "layout.html"%}
+{%block content%}
+	{%if current_user.username == "Quick Cart"%}
+		<h2>Hello {{current_user.username}}, all your posts and recipes can be found here.</h2>
+	{%else%}
+		<h2>Hello {{current_user.username}}, all your recipes can be found here.</h2>
+	{%endif%}
+	{%for recipe in recipes%}
+		{%if current_user.username == recipe.author.username%}
+			<article class="media content-section">
+			  <div class="media-body">
+				<div class="article-metadata">
+				  <h2><a class="article-title">{{ recipe.author.username }}</a></h2>
+				  <a class="mr-5 " href="{{url_for('updateRecipe', id=recipe.id)}}">Update</a>
+				</div>
+				<h2><a class="article-title">
+					<center>{{ recipe.title }}</center>
+				</a></h2>
+				<p class="article-content">{{ recipe.recipe }}</p>
+				<div>
+					<form action="{{url_for('deleteRecipe', id=recipe.id)}}" method="POST">
+						<input class="btn btn-danger" type="submit" value="Delete">
+					</form>
+				 </div>
+			  </div>
+			</article>
+		{%endif%}
+	{%endfor%}
+	
+	{%for post in posts%}
+		{%if current_user.username == post.author.username%}
+			<article class="media content-section">
+			  <div class="media-body">
+				<div class="article-metadata">
+				  <h2><a class="article-title">{{ post.author.username }}</a></h2>
+				  <small class="text-muted">{{ post.date_posted.strftime('%Y-%m-%d') }}</small>
+				  <a class="mr-5" href="{{url_for('updatePost', id=post.id)}}">Update</a>
+				</div>
+				<h2><a class="article-title">{{ post.title }}</a></h2>
+				<p class="article-content">{{ post.content }}</p>
+				<div>
+					<form action="{{url_for('deletePost', id=post.id)}}" method="POST">
+						<input class="btn btn-danger" type="submit" value="Delete">
+					</form>
+				 </div>
+			  </div>
+			</article>
+		{%endif%}
+	{%endfor%}
+{%endblock content%}

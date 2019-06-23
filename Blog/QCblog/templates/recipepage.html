@@ -1,0 +1,16 @@
+{%extends "layout.html"%}
+{%block content%}
+	{%for recipe in recipes%}
+		<article class="media content-section">
+		  <div class="media-body">
+			<div class="article-metadata">
+			  <h3><a class="mr-2" >Author: {{ recipe.author.username }}</a></h3>
+			</div>
+			<h2><a class="article-title">
+				<center>{{ recipe.title }}</center>
+			</a></h2>
+			<p class="article-content">{{ recipe.recipe }}</p>
+		  </div>
+		</article>
+	{%endfor%}
+{%endblock content%}
