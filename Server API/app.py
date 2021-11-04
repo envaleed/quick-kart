@@ -5,9 +5,12 @@ from flask_marshmallow import Marshmallow
 from werkzeug.urls import url_parse
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bcrypt import Bcrypt
+from flask_jwt import JWT, jwt_required, current_identity
 
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'super-secret'
+app.config['JWT_AUTH_ENDPOINT'] = 'token'
 bcrypt = Bcrypt(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root@localhost:3306/supermarket'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -39,7 +42,7 @@ class Users(db.Model):
     password_hash = db.Column(db.String(128), nullable=True)
 
     def __repr__(self):
-        return '<Users %r>' % self.username 
+        return '<Users %r>' % self.id 
 
     def set_password(self,password):
         self.password_hash = bcrypt.generate_password_hash(password)
@@ -83,47 +86,25 @@ def error_404(error):
 def error_500(error):
     return jsonify(error.description), 404
 
-@app.route('/api/login/', methods=['POST'])
-def login():
-    if request.method == 'POST':
-        username = request.json['username']
-        password = request.json['password']
-        user = Users.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            user = user_schema.dump(user)
-            return jsonify(user)
-    return abort(500,"Invalid username or password")
+def authenticate(username, password):
+    user = Users.query.filter_by(username=username).first()
+    if user and user.check_password(password):
+        return user
 
-@app.route('/api/logout')
-def logout():
-    logout_user()
-    return jsonify({'Logged Out':'Successful'})
+def identity(payload):
+    return Users.query.filter(Users.id == payload['identity']).scalar()
 
+jwt = JWT(app,authenticate,identity)
 
-@app.route('/api/registration/', methods=['POST'])
-def registration():
+@jwt_required
+@app.route('/api/search/',methods=['POST'])
+def search_item():
     if request.method == "POST":
-        username = request.json['username']
-        password = request.json['password']
-        email = request.json['email']
-        if Users.query.filter_by(username = username).first():
-            abort(500,"This username is already taken, please enter a different one")
-        if Users.query.filter_by(email = email).first():
-            abort(500,"This email is already registered, please enter a different one")
-        user = Users(username=username, email=email)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-        return jsonify({'id': user.id, 'email': user.email})
-    return abort(500)
-
-@app.route('/api/search/<search>',methods=['GET'])
-def get_item(search):
-    search_ = str(search)
-    search_ = "%"+search_+"%"
-    item = Grocery.query.filter(Grocery.tag.like(search_)).all()
-    item = groceries_schema.dump(item)
-    return jsonify({search:item})
+        search_ = str(search)
+        search_ = "%"+search_+"%"
+        item = Grocery.query.filter(Grocery.tag.like(search_)).all()
+        item = groceries_schema.dump(item)
+        return jsonify({search:item})
 
 @app.route('/api/search2/<search2>',methods=['GET'])
 def get_item1(search2):
@@ -151,6 +132,11 @@ def query_for_order(order):
     orders = Orders.query.filter_by(pickupcode=order).all()
     orders = orders_schema.dump(orders).data
     return jsonify({order:orders})
+
+@app.route('/api/logout')
+def logout():
+    logout_user()
+    return jsonify({'Logged Out':'Successful'})
 
 def load_user(id):
     return User.query.get(int(id))
