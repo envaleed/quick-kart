@@ -12,7 +12,7 @@ flask-marshmallow = "*"
 marshmallow-sqlalchemy = "*"
 pymysql = "*"
 flask-bcrypt = "*"
-py-bcrypt = "*"
+flask-jwt = "*"
 
 [requires]
 python_version = "3.8"
