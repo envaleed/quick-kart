@@ -2,10 +2,12 @@ from flask import Flask, json, jsonify, make_response, request, redirect, url_fo
 import pymysql
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
+from sqlalchemy.orm import backref
 from werkzeug.urls import url_parse
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bcrypt import Bcrypt
 from flask_jwt import JWT, jwt_required, current_identity
+import uuid
 
 
 app = Flask(__name__)
@@ -40,9 +42,10 @@ class Users(db.Model):
     username = db.Column(db.String(64), index=True, unique=True, nullable=True)
     email = db.Column(db.String(64), index=True, unique=True, nullable=True)
     password_hash = db.Column(db.String(128), nullable=True)
+    orders = db.relationship('Orders', backref="users", lazy=True)
 
     def __repr__(self):
-        return '<Users %r>' % self.id 
+        return '<Users %r>' % self.id
 
     def set_password(self,password):
         self.password_hash = bcrypt.generate_password_hash(password)
@@ -52,8 +55,9 @@ class Users(db.Model):
 
 class Orders(db.Model):
     __tablename__ = 'orders'
-    
-    id = db.Column(db.Integer, primary_key=True)
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     title = db.Column(db.String(60), unique=True, nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     pickupcode = db.Column(db.String(255),nullable=False)
@@ -96,52 +100,60 @@ def identity(payload):
 
 jwt = JWT(app,authenticate,identity)
 
-@jwt_required
+@app.route('/api/registration/', methods=['POST'])
+def registration():
+    if request.method == "POST" and request.json:
+        username = request.json["username"]
+        password = request.json["password"]
+        email = request.json["email"]
+        if not Users.query.filter_by(username=username).first() and not Users.query.filter_by(email=email).first():
+            password = bcrypt.generate_password_hash(password)
+            user = Users(username=username,password_hash=password,email=email)
+            db.session.add(user)
+            db.session.commit()
+            return jsonify({"You have successfully registered":user.username})
+        return abort(500,"The username or email is already in use")
+    return abort(500)
+
+
 @app.route('/api/search/',methods=['POST'])
+@jwt_required()
 def search_item():
-    if request.method == "POST":
-        search_ = str(search)
-        search_ = "%"+search_+"%"
-        item = Grocery.query.filter(Grocery.tag.like(search_)).all()
+    if request.method == "POST" and request.json:
+        keyword = request.json['keyword']
+        keyword = "%"+keyword+"%"
+        item = Grocery.query.filter(Grocery.tag.like(keyword)).all()
         item = groceries_schema.dump(item)
-        return jsonify({search:item})
+        return jsonify(item)
 
-@app.route('/api/search2/<search2>',methods=['GET'])
-def get_item1(search2):
-    search_ = str(search2)
-    search_ = "%"+search_+"%"
-    item = Grocery.query.filter(Grocery.tag.like(search_)).all()
-    item = groceries_schema.dump(item).data
-    return jsonify(item)
 
-@app.route('/api/postorder/<code>',methods=['POST'])
-def stress_exe(code):
-    if not request.json:
-        return error()
-    id_ = request.json['id']
-    title_ = request.json['title']
-    quantity_ = request.json['quantity']
-    pickupcode_ = code
-    order = Orders(id=id_,title=title_, quantity=quantity_,pickupcode=pickupcode_)
-    db.session.add(order)
-    db.session.commit()
-    return jsonify({"Successfully added":"yes"})
+@app.route('/api/postorder/',methods=['POST'])
+@jwt_required()
+def post_order():
+    if request.method == "POST" and request.json:
+        title = request.json['title']
+        quantity = request.json['quantity']
+        pickupcode = uuid.uuid1()
+        print(current_identity)
+        user_id = current_identity.id
+        order = Orders(title=title, quantity=quantity,pickupcode=pickupcode, user_id=user_id)
+        db.session.add(order)
+        db.session.commit()
+        return jsonify({"Successfully added":order.title})
+    return abort(500)
 
-@app.route('/api/fetchorder/<order>',methods=['GET'])
-def query_for_order(order):
-    orders = Orders.query.filter_by(pickupcode=order).all()
-    orders = orders_schema.dump(orders).data
-    return jsonify({order:orders})
+@app.route('/api/findorders/<id>/',methods=['GET'])
+def find_orders(id):
+    orders = Orders.query.filter_by(user_id=id).all()
+    orders = orders_schema.dump(orders)
+    return jsonify(orders)
 
-@app.route('/api/logout')
-def logout():
-    logout_user()
-    return jsonify({'Logged Out':'Successful'})
+@app.route('/api/findorder/<id>/<title>/',methods=['GET'])
+def find_order(id,title):
+    order = Orders.query.filter_by(user_id=id,title=title)
+    order = orders_schema.dump(order)
+    return jsonify(order)
 
-def load_user(id):
-    return User.query.get(int(id))
-
-    
 if __name__ == '__main__':
     app.run(debug=True)
 
